@@ -1,102 +1,96 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
+import time
 
-st.set_page_config(page_title="Squeeze Scanner", layout="wide")
+st.set_page_config(page_title="Pro Squeeze Scanner", layout="wide")
 
-st.title("🚀 Squeeze Scanner (Real Data)")
+st.title("🚀 Pro Squeeze Scanner")
 
 TICKERS = ["AMC", "GME", "BB", "BYND", "NKLA", "SAVA", "FUBO", "PLUG", "RIVN"]
 
 # -----------------------------
-# SAFE REAL DATA FUNCTION
+# CORE DATA ENGINE (ROBUST)
 # -----------------------------
 
 @st.cache_data(ttl=300)
-def get_stock_data(ticker):
+def fetch_data(ticker):
     try:
-        import time
+        t = yf.Ticker(ticker)
 
-        df = None
+        # safer than download (more stable on cloud)
+        hist = t.history(period="3mo")
 
-        # 🔁 retry logic (important fix)
-        for _ in range(3):
-            df = yf.download(ticker, period="3mo", progress=False)
-            if df is not None and not df.empty:
-                break
-            time.sleep(0.5)
+        if hist is None or hist.empty:
+            return None
 
-        # 🧠 fallback so app NEVER breaks
-        if df is None or df.empty:
-            return {
-                "Ticker": ticker,
-                "Score": 0,
-                "RSI": 50,
-                "Rel Volume": 1,
-                "3M Change %": 0,
-                "Note": "Fallback (no data from Yahoo)"
-            }
+        close = hist["Close"]
+        volume = hist["Volume"]
 
-        close = df["Close"]
-        volume = df["Volume"]
-
+        # ---- indicators ----
         rel_vol = float(volume.iloc[-1] / volume.mean())
+
         change = float((close.iloc[-1] / close.iloc[0]) - 1)
 
+        # RSI (stable version)
         delta = close.diff()
         gain = delta.where(delta > 0, 0).rolling(14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
         rs = gain / loss
         rsi = float(100 - (100 / (1 + rs)).iloc[-1])
 
+        # -----------------------------
+        # PRO SIGNAL ENGINE
+        # -----------------------------
         score = 0
+        signals = []
+
         if rsi < 30:
-            score += 30
+            score += 35
+            signals.append("RSI Oversold")
+
         if rel_vol > 2:
             score += 30
+            signals.append("Volume Spike")
+
         if change < -0.1:
             score += 20
+            signals.append("Downtrend Bounce Setup")
+
+        if score >= 70:
+            signal = "🚨 STRONG SQUEEZE SETUP"
+        elif score >= 40:
+            signal = "⚠️ WATCH"
+        else:
+            signal = "—"
 
         return {
             "Ticker": ticker,
             "Score": round(score, 2),
             "RSI": round(rsi, 2),
             "Rel Volume": round(rel_vol, 2),
-            "3M Change %": round(change * 100, 2)
+            "3M Change %": round(change * 100, 2),
+            "Signal": signal,
+            "Triggers": ", ".join(signals)
         }
 
-    except:
-        return {
-            "Ticker": ticker,
-            "Score": 0,
-            "RSI": 50,
-            "Rel Volume": 1,
-            "3M Change %": 0,
-            "Note": "Error handled"
-        }
+    except Exception:
+        return None
 
 # -----------------------------
-# UI
+# SCANNER UI
 # -----------------------------
 
-if st.button("Run Real Data Scan"):
+if st.button("Run Pro Scan"):
+
     results = []
 
-    for t in TICKERS:
-        data = get_stock_data(t)
-        if data:
-            results.append(data)
+    with st.spinner("Scanning market..."):
+        for t in TICKERS:
+            data = fetch_data(t)
+            if data:
+                results.append(data)
+            time.sleep(0.2)  # prevents API throttling
 
     if results:
-        df = pd.DataFrame(results)
-        df = df.sort_values("Score", ascending=False)
-
-        st.dataframe(df, use_container_width=True)
-
-        alerts = df[df["Score"] > 60]
-
-        if not alerts.empty:
-            st.error("🚨 SQUEEZE ALERTS")
-            st.dataframe(alerts, use_container_width=True)
-    else:
-        st.warning("No data returned — try again in a moment")
+        df
