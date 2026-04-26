@@ -8,19 +8,17 @@ st.title("🚀 Squeeze Scanner (Stable Live Version)")
 
 TICKERS = ["AMC", "GME", "BB", "BYND", "NKLA", "SAVA", "FUBO", "PLUG", "RIVN"]
 
-def safe_get_data(ticker):
+def get_data(ticker):
     try:
-        data = yf.download(ticker, period="3mo", progress=False)
+        df = yf.download(ticker, period="3mo", progress=False)
 
-        if data is None or data.empty:
+        if df is None or df.empty:
             return None
 
-        close = data["Close"]
-        volume = data["Volume"]
+        close = df["Close"]
+        volume = df["Volume"]
 
-        rsi = 50  # simplified stable RSI proxy
         rel_vol = volume.iloc[-1] / volume.mean()
-
         change = (close.iloc[-1] / close.iloc[0]) - 1
 
         score = 0
@@ -44,7 +42,7 @@ if st.button("Run Scan"):
     results = []
 
     for t in TICKERS:
-        r = safe_get_data(t)
+        r = get_data(t)
         if r:
             results.append(r)
 
@@ -60,4 +58,4 @@ if st.button("Run Scan"):
             st.error("🚨 SQUEEZE ALERTS")
             st.dataframe(alerts)
     else:
-        st.warning("No data available right now — try again")
+        st.warning("No data available — try again")
