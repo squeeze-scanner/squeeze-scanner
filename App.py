@@ -114,4 +114,4 @@ if st.button("Run Pro Scan"):
 
     if not alerts.empty:
         st.error("🚨 STRONG SQUEEZE SETUPS DETECTED")
-        st.dataframe(alerts, use_container_width=True)1
+        st.dataframe(alerts, use_container_width=True)
