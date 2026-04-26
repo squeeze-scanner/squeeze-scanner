@@ -1,38 +1,47 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
+import time
 
-st.set_page_config(page_title="Squeeze Scanner", layout="wide")
+st.set_page_config(page_title="Pro Squeeze Scanner", layout="wide")
 
-st.title("🚀 Squeeze Scanner")
+st.title("🚀 Pro Squeeze Scanner")
 
 TICKERS = ["AMC", "GME", "BB", "BYND", "NKLA", "SAVA", "FUBO", "PLUG", "RIVN"]
 
 # -----------------------------
-# SAFE REAL DATA FUNCTION
+# CORE DATA ENGINE (ROBUST)
 # -----------------------------
 
 @st.cache_data(ttl=300)
-def get_data(ticker):
+def fetch_data(ticker):
     try:
-        df = yf.download(ticker, period="3mo", progress=False)
+        t = yf.Ticker(ticker)
 
-        if df is None or df.empty:
+        # safer than download (more stable on cloud)
+        hist = t.history(period="3mo")
+
+        if hist is None or hist.empty:
             return None
 
-        close = df["Close"]
-        volume = df["Volume"]
+        close = hist["Close"]
+        volume = hist["Volume"]
 
-        # RSI calculation (stable)
+        # ---- indicators ----
+        rel_vol = float(volume.iloc[-1] / volume.mean())
+
+        change = float((close.iloc[-1] / close.iloc[0]) - 1)
+
+        # RSI (stable version)
         delta = close.diff()
         gain = delta.where(delta > 0, 0).rolling(14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
         rs = gain / loss
         rsi = float(100 - (100 / (1 + rs)).iloc[-1])
 
-        rel_vol = float(volume.iloc[-1] / volume.mean())
-        change = float((close.iloc[-1] / close.iloc[0]) - 1)
-
+        # -----------------------------
+        # PRO SIGNAL ENGINE
+        # -----------------------------
         score = 0
         signals = []
 
@@ -46,10 +55,10 @@ def get_data(ticker):
 
         if change < -0.1:
             score += 20
-            signals.append("Reversal Setup")
+            signals.append("Downtrend Bounce Setup")
 
         if score >= 70:
-            signal = "🚨 STRONG SETUP"
+            signal = "🚨 STRONG SQUEEZE SETUP"
         elif score >= 40:
             signal = "⚠️ WATCH"
         else:
@@ -60,10 +69,49 @@ def get_data(ticker):
             "Score": round(score, 2),
             "RSI": round(rsi, 2),
             "Rel Volume": round(rel_vol, 2),
-            "Change %": round(change * 100, 2),
+            "3M Change %": round(change * 100, 2),
             "Signal": signal,
             "Triggers": ", ".join(signals)
         }
 
-    except:
-        return
+    except Exception:
+        return None
+
+# -----------------------------
+# SCANNER UI
+# -----------------------------
+
+if st.button("Run Pro Scan"):
+
+    results = []
+
+    with st.spinner("Scanning market..."):
+        for t in TICKERS:
+            data = fetch_data(t)
+            if data:
+                results.append(data)
+
+    # 🧠 ALWAYS create df (fixes NameError)
+    if len(results) == 0:
+        st.warning("No data returned — showing empty table")
+        df = pd.DataFrame([{
+            "Ticker": "N/A",
+            "Score": 0,
+            "RSI": 0,
+            "Rel Volume": 0,
+            "3M Change %": 0,
+            "Signal": "No Data",
+            "Triggers": "Retry scan"
+        }])
+    else:
+        df = pd.DataFrame(results)
+        df = df.sort_values("Score", ascending=False)
+
+    st.subheader("📊 Scan Results")
+    st.dataframe(df, use_container_width=True)
+
+    alerts = df[df["Score"] >= 70]
+
+    if not alerts.empty:
+        st.error("🚨 STRONG SQUEEZE SETUPS DETECTED")
+        st.dataframe(alerts, use_container_width=True)
