@@ -3,44 +3,39 @@ import pandas as pd
 import yfinance as yf
 import time
 
-st.set_page_config(page_title="Pro Squeeze Scanner", layout="wide")
+st.set_page_config(page_title="Pro Trading Scanner", layout="wide")
 
-st.title("🚀 Pro Squeeze Scanner")
+st.title("📊 Pro Trading Scanner")
 
 TICKERS = ["AMC", "GME", "BB", "BYND", "NKLA", "SAVA", "FUBO", "PLUG", "RIVN"]
 
 # -----------------------------
-# CORE DATA ENGINE (ROBUST)
+# SAFE DATA ENGINE
 # -----------------------------
 
-@st.cache_data(ttl=300)
-def fetch_data(ticker):
+@st.cache_data(ttl=60)
+def get_data(ticker):
     try:
-        t = yf.Ticker(ticker)
+        df = yf.download(ticker, period="3mo", progress=False)
 
-        # safer than download (more stable on cloud)
-        hist = t.history(period="3mo")
-
-        if hist is None or hist.empty:
+        if df is None or df.empty:
             return None
 
-        close = hist["Close"]
-        volume = hist["Volume"]
+        close = df["Close"]
+        volume = df["Volume"]
 
-        # ---- indicators ----
-        rel_vol = float(volume.iloc[-1] / volume.mean())
-
-        change = float((close.iloc[-1] / close.iloc[0]) - 1)
-
-        # RSI (stable version)
+        # RSI
         delta = close.diff()
         gain = delta.where(delta > 0, 0).rolling(14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
         rs = gain / loss
         rsi = float(100 - (100 / (1 + rs)).iloc[-1])
 
+        rel_vol = float(volume.iloc[-1] / volume.mean())
+        change = float((close.iloc[-1] / close.iloc[0]) - 1)
+
         # -----------------------------
-        # PRO SIGNAL ENGINE
+        # IMPROVED SIGNAL ENGINE
         # -----------------------------
         score = 0
         signals = []
@@ -55,10 +50,14 @@ def fetch_data(ticker):
 
         if change < -0.1:
             score += 20
-            signals.append("Downtrend Bounce Setup")
+            signals.append("Oversold Reversal Setup")
+
+        if rsi > 70:
+            score -= 10
+            signals.append("Overbought Risk")
 
         if score >= 70:
-            signal = "🚨 STRONG SQUEEZE SETUP"
+            signal = "🚨 STRONG SETUP"
         elif score >= 40:
             signal = "⚠️ WATCH"
         else:
@@ -69,49 +68,84 @@ def fetch_data(ticker):
             "Score": round(score, 2),
             "RSI": round(rsi, 2),
             "Rel Volume": round(rel_vol, 2),
-            "3M Change %": round(change * 100, 2),
+            "Change %": round(change * 100, 2),
             "Signal": signal,
             "Triggers": ", ".join(signals)
         }
 
-    except Exception:
+    except:
         return None
 
+
 # -----------------------------
-# SCANNER UI
+# AUTO REFRESH CONTROL
 # -----------------------------
 
-if st.button("Run Pro Scan"):
+refresh = st.sidebar.checkbox("🔄 Auto Refresh (30s)")
 
+if refresh:
+    st.sidebar.info("Auto-refresh enabled")
+
+# -----------------------------
+# MAIN SCAN
+# -----------------------------
+
+def run_scan():
     results = []
 
-    with st.spinner("Scanning market..."):
-        for t in TICKERS:
-            data = fetch_data(t)
-            if data:
-                results.append(data)
+    for t in TICKERS:
+        data = get_data(t)
+        if data:
+            results.append(data)
+        time.sleep(0.1)
 
-    # 🧠 ALWAYS create df (fixes NameError)
     if len(results) == 0:
-        st.warning("No data returned — showing empty table")
-        df = pd.DataFrame([{
+        return pd.DataFrame([{
             "Ticker": "N/A",
             "Score": 0,
             "RSI": 0,
             "Rel Volume": 0,
-            "3M Change %": 0,
+            "Change %": 0,
             "Signal": "No Data",
             "Triggers": "Retry scan"
         }])
-    else:
-        df = pd.DataFrame(results)
-        df = df.sort_values("Score", ascending=False)
 
-    st.subheader("📊 Scan Results")
-    st.dataframe(df, use_container_width=True)
+    df = pd.DataFrame(results)
+    return df.sort_values("Score", ascending=False)
 
-    alerts = df[df["Score"] >= 70]
 
-    if not alerts.empty:
-        st.error("🚨 STRONG SQUEEZE SETUPS DETECTED")
-        st.dataframe(alerts, use_container_width=True)
+# -----------------------------
+# UI LOOP
+# -----------------------------
+
+if refresh:
+    placeholder = st.empty()
+
+    while True:
+        with placeholder.container():
+            df = run_scan()
+
+            st.subheader("📊 Live Market Scan")
+            st.dataframe(df, use_container_width=True)
+
+            alerts = df[df["Score"] >= 70]
+
+            if not alerts.empty:
+                st.error("🚨 STRONG SETUPS DETECTED")
+                st.dataframe(alerts, use_container_width=True)
+
+        time.sleep(30)
+        st.rerun()
+
+else:
+    if st.button("Run Scan"):
+        df = run_scan()
+
+        st.subheader("📊 Scan Results")
+        st.dataframe(df, use_container_width=True)
+
+        alerts = df[df["Score"] >= 70]
+
+        if not alerts.empty:
+            st.error("🚨 STRONG SETUPS DETECTED")
+            st.dataframe(alerts, use_container_width=True)
