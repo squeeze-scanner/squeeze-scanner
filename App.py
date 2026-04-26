@@ -1,6 +1,6 @@
 =====================================================
 
-SQUEEZE SCANNER — REAL DATA VERSION (STABLE)
+# SQUEEZE SCANNER - REAL DATA VERSION (STABLE)
 
 =====================================================
 
