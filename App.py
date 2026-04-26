@@ -17,30 +17,37 @@ TICKERS = ["AMC", "GME", "BB", "BYND", "NKLA", "SAVA", "FUBO", "PLUG", "RIVN"]
 def fetch_data(ticker):
     try:
         t = yf.Ticker(ticker)
-
-        # safer than download (more stable on cloud)
         hist = t.history(period="3mo")
 
         if hist is None or hist.empty:
             return None
 
-        close = hist["Close"]
-        volume = hist["Volume"]
+        close = hist["Close"].dropna()
+        volume = hist["Volume"].fillna(0)
 
-        # ---- indicators ----
-        rel_vol = float(volume.iloc[-1] / volume.mean())
+        if len(close) < 20:
+            return None
+
+        # --------------------
+        # SAFE CALCULATIONS
+        # --------------------
+
+        rel_vol = float(volume.iloc[-1] / (volume.mean() if volume.mean() != 0 else 1))
 
         change = float((close.iloc[-1] / close.iloc[0]) - 1)
 
-        # RSI (stable version)
         delta = close.diff()
+
         gain = delta.where(delta > 0, 0).rolling(14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-        rs = gain / loss
-        rsi = float(100 - (100 / (1 + rs)).iloc[-1])
+
+        rs = gain / (loss.replace(0, 0.0001))  # prevents divide-by-zero
+
+        rsi_series = 100 - (100 / (1 + rs))
+        rsi = float(rsi_series.iloc[-1]) if not rsi_series.isna().iloc[-1] else 50
 
         # -----------------------------
-        # PRO SIGNAL ENGINE
+        # SIGNAL ENGINE
         # -----------------------------
         score = 0
         signals = []
@@ -55,7 +62,7 @@ def fetch_data(ticker):
 
         if change < -0.1:
             score += 20
-            signals.append("Downtrend Bounce Setup")
+            signals.append("Reversal Setup")
 
         if score >= 70:
             signal = "🚨 STRONG SQUEEZE SETUP"
@@ -75,7 +82,15 @@ def fetch_data(ticker):
         }
 
     except Exception:
-        return None
+        return {
+            "Ticker": ticker,
+            "Score": 0,
+            "RSI": 50,
+            "Rel Volume": 1,
+            "3M Change %": 0,
+            "Signal": "Error Safe Mode",
+            "Triggers": "Data fallback used"
+        }
 
 # -----------------------------
 # SCANNER UI
