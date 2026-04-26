@@ -1,3 +1,5 @@
+from universe_builder import load_sp500_universe
+
 import streamlit as st
 import pandas as pd
 import yfinance as yf
