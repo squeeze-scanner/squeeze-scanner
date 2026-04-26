@@ -4,24 +4,30 @@ import yfinance as yf
 
 st.set_page_config(page_title="Squeeze Scanner", layout="wide")
 
-st.title("🚀 Squeeze Scanner (Stable Live Version)")
+st.title("🚀 Squeeze Scanner (Always Works Version)")
 
 TICKERS = ["AMC", "GME", "BB", "BYND", "NKLA", "SAVA", "FUBO", "PLUG", "RIVN"]
 
-def get_data(ticker):
+def safe_scan(ticker):
     try:
         df = yf.download(ticker, period="3mo", progress=False)
 
-        if df is None or df.empty:
-            return None
+        # HARD SAFETY CHECK (prevents blank crashes)
+        if df is None or df.empty or "Close" not in df:
+            return {
+                "Ticker": ticker,
+                "Score": 0,
+                "Note": "No data"
+            }
 
         close = df["Close"]
         volume = df["Volume"]
 
-        rel_vol = volume.iloc[-1] / volume.mean()
-        change = (close.iloc[-1] / close.iloc[0]) - 1
+        rel_vol = float(volume.iloc[-1] / volume.mean()) if volume.mean() != 0 else 0
+        change = float((close.iloc[-1] / close.iloc[0]) - 1)
 
         score = 0
+
         if rel_vol > 2:
             score += 40
         if change < -0.1:
@@ -29,33 +35,34 @@ def get_data(ticker):
 
         return {
             "Ticker": ticker,
-            "Score": round(score, 2),
+            "Score": score,
             "Rel Volume": round(rel_vol, 2),
             "3M Change %": round(change * 100, 2)
         }
 
-    except:
-        return None
+    except Exception:
+        return {
+            "Ticker": ticker,
+            "Score": 0,
+            "Note": "Error handled"
+        }
 
+# ALWAYS SHOW UI (important fix)
+st.write("Click scan to load market data")
 
 if st.button("Run Scan"):
     results = []
 
     for t in TICKERS:
-        r = get_data(t)
-        if r:
-            results.append(r)
+        results.append(safe_scan(t))
 
-    if results:
-        df = pd.DataFrame(results)
-        df = df.sort_values("Score", ascending=False)
+    df = pd.DataFrame(results)
+    df = df.sort_values("Score", ascending=False)
 
-        st.dataframe(df, use_container_width=True)
+    st.dataframe(df, use_container_width=True)
 
-        alerts = df[df["Score"] > 50]
+    alerts = df[df["Score"] > 50]
 
-        if not alerts.empty:
-            st.error("🚨 SQUEEZE ALERTS")
-            st.dataframe(alerts)
-    else:
-        st.warning("No data available — try again")
+    if not alerts.empty:
+        st.error("🚨 SQUEEZE ALERTS")
+        st.dataframe(alerts)
