@@ -1,19 +1,26 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-import time
 
-st.set_page_config(page_title="Pro Squeeze Scanner", layout="wide")
+st.set_page_config(page_title="Pro Trading System v2", layout="wide")
 
-st.title("🚀 Pro Squeeze Scanner")
+st.title("📊 Pro Trading System v2")
 
 TICKERS = ["AMC", "GME", "BB", "BYND", "NKLA", "SAVA", "FUBO", "PLUG", "RIVN"]
 
 # -----------------------------
-# CORE DATA ENGINE (ROBUST)
+# LIVE MODE (SAFE)
+# -----------------------------
+live = st.sidebar.checkbox("🔄 Live Mode (30s refresh)")
+
+if live:
+    st.autorefresh(interval=30000, key="refresh")
+
+# -----------------------------
+# DATA ENGINE (HARDENED)
 # -----------------------------
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def fetch_data(ticker):
     try:
         t = yf.Ticker(ticker)
@@ -28,12 +35,10 @@ def fetch_data(ticker):
         if len(close) < 20:
             return None
 
-        # --------------------
-        # SAFE CALCULATIONS
-        # --------------------
-
-        rel_vol = float(volume.iloc[-1] / (volume.mean() if volume.mean() != 0 else 1))
-
+        # -------------------------
+        # CORE METRICS
+        # -------------------------
+        rel_vol = float(volume.iloc[-1] / (volume.mean() or 1))
         change = float((close.iloc[-1] / close.iloc[0]) - 1)
 
         delta = close.diff()
@@ -41,92 +46,48 @@ def fetch_data(ticker):
         gain = delta.where(delta > 0, 0).rolling(14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
 
-        rs = gain / (loss.replace(0, 0.0001))  # prevents divide-by-zero
+        rs = gain / (loss.replace(0, 0.0001))
+        rsi = float(100 - (100 / (1 + rs)).iloc[-1]) if not rs.isna().iloc[-1] else 50
 
-        rsi_series = 100 - (100 / (1 + rs))
-        rsi = float(rsi_series.iloc[-1]) if not rsi_series.isna().iloc[-1] else 50
-
-        # -----------------------------
-        # SIGNAL ENGINE
-        # -----------------------------
+        # -------------------------
+        # PRO SCORING ENGINE v2
+        # -------------------------
         score = 0
         signals = []
 
+        # Oversold strength
         if rsi < 30:
-            score += 35
-            signals.append("RSI Oversold")
+            score += 40
+            signals.append("Oversold (RSI)")
 
+        # Momentum spike
         if rel_vol > 2:
             score += 30
-            signals.append("Volume Spike")
+            signals.append("Volume Surge")
 
+        # Reversal setup
         if change < -0.1:
             score += 20
-            signals.append("Reversal Setup")
+            signals.append("Reversal Zone")
 
-        if score >= 70:
-            signal = "🚨 STRONG SQUEEZE SETUP"
-        elif score >= 40:
-            signal = "⚠️ WATCH"
+        # Trend risk filter
+        if rsi > 70:
+            score -= 10
+            signals.append("Overbought Risk")
+
+        # -------------------------
+        # CLASSIFICATION
+        # -------------------------
+        if score >= 75:
+            status = "🚨 HIGH PROBABILITY SQUEEZE"
+        elif score >= 50:
+            status = "⚠️ WATCHLIST"
+        elif score >= 25:
+            status = "Low Interest"
         else:
-            signal = "—"
+            status = "No Setup"
 
         return {
             "Ticker": ticker,
             "Score": round(score, 2),
-            "RSI": round(rsi, 2),
-            "Rel Volume": round(rel_vol, 2),
-            "3M Change %": round(change * 100, 2),
-            "Signal": signal,
-            "Triggers": ", ".join(signals)
-        }
-
-    except Exception:
-        return {
-            "Ticker": ticker,
-            "Score": 0,
-            "RSI": 50,
-            "Rel Volume": 1,
-            "3M Change %": 0,
-            "Signal": "Error Safe Mode",
-            "Triggers": "Data fallback used"
-        }
-
-# -----------------------------
-# SCANNER UI
-# -----------------------------
-
-if st.button("Run Pro Scan"):
-
-    results = []
-
-    with st.spinner("Scanning market..."):
-        for t in TICKERS:
-            data = fetch_data(t)
-            if data:
-                results.append(data)
-
-    # 🧠 ALWAYS create df (fixes NameError)
-    if len(results) == 0:
-        st.warning("No data returned — showing empty table")
-        df = pd.DataFrame([{
-            "Ticker": "N/A",
-            "Score": 0,
-            "RSI": 0,
-            "Rel Volume": 0,
-            "3M Change %": 0,
-            "Signal": "No Data",
-            "Triggers": "Retry scan"
-        }])
-    else:
-        df = pd.DataFrame(results)
-        df = df.sort_values("Score", ascending=False)
-
-    st.subheader("📊 Scan Results")
-    st.dataframe(df, use_container_width=True)
-
-    alerts = df[df["Score"] >= 70]
-
-    if not alerts.empty:
-        st.error("🚨 STRONG SQUEEZE SETUPS DETECTED")
-        st.dataframe(alerts, use_container_width=True)
+            "RS
