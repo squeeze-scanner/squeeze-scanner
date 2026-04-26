@@ -28,6 +28,7 @@ def fetch(ticker):
             return None
 
         close = df["Close"]
+        price = float(close.iloc[-1])
         volume = df["Volume"]
         returns = close.pct_change()
 
