@@ -12,14 +12,19 @@ st.title("🧠 Smart Universe Scanner v5")
 # -----------------------------
 
 @st.cache_data
-def load_universe():
+def get_universe():
+    sp500 = load_sp500_universe()
+
+    if sp500:
+        return sp500
+
     try:
         df = pd.read_csv("universe.csv")
-        return df["ticker"].dropna().tolist()
+        return df["ticker"].tolist()
     except:
         return []
 
-TICKERS = load_universe()
+TICKERS = get_universe()
 
 if not TICKERS:
     st.error("Universe file missing or empty")
