@@ -1,4 +1,8 @@
-streamlit
-yfinance
+fastapi
+uvicorn
 pandas
 numpy
+requests
+pandas-ta
+python-dotenv
+apscheduler
