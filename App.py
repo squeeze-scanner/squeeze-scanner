@@ -57,7 +57,7 @@ def score_stock(ticker):
     except:
         return None
 
-st.title("🚀 Squeeze Scanner")
+st.title("Squeeze Scanner")
 
 if st.button("Run Scan"):
     results = []
@@ -76,5 +76,5 @@ if st.button("Run Scan"):
         alerts = df[df["Score"] > 60]
 
         if not alerts.empty:
-            st.error("🚨 SQUEEZE ALERTS")
+            st.error("SQUEEZE ALERTS")
             st.dataframe(alerts)
