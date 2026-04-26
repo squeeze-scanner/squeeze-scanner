@@ -82,6 +82,7 @@ def fetch(ticker):
 
         return {
             "Ticker": ticker,
+            "Price": round(price, 2),
             "Score": round(score, 2),
             "Momentum": round(momentum * 100, 2),
             "Volatility": round(volatility, 2),
