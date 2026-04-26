@@ -21,24 +21,31 @@ def score_stock(ticker):
         stock = yf.Ticker(ticker)
         hist = stock.history(period="3mo")
 
-        if hist.empty:
+        if hist is None or hist.empty:
             return None
 
         close = hist["Close"]
         volume = hist["Volume"]
 
-        rsi_val = rsi(close).iloc[-1]
-        rel_vol = volume.iloc[-1] / volume.mean()
+        rsi_val = float(rsi(close).iloc[-1])
+        rel_vol = float(volume.iloc[-1] / volume.mean())
 
-        info = {}
+        # NEVER trust .info on cloud → safe fallback
         try:
-            info = stock.info or {}
+            info = stock.fast_info if hasattr(stock, "fast_info") else {}
         except:
             info = {}
 
-        short_float = (info.get("shortPercentOfFloat", 0) or 0) * 100
-        shares_short = info.get("sharesShort", 0) or 0
-        avg_vol = info.get("averageVolume", 1) or 1
+        short_float = 0
+        shares_short = 0
+        avg_vol = 1
+
+        try:
+            short_float = float(getattr(stock, "info", {}).get("shortPercentOfFloat", 0) or 0) * 100
+            shares_short = float(getattr(stock, "info", {}).get("sharesShort", 0) or 0)
+            avg_vol = float(getattr(stock, "info", {}).get("averageVolume", 1) or 1)
+        except:
+            pass
 
         days_to_cover = shares_short / avg_vol if avg_vol else 0
 
@@ -62,8 +69,9 @@ def score_stock(ticker):
             "Rel Volume": round(rel_vol, 2)
         }
 
-    except:
+    except Exception:
         return None
+
 
 if st.button("Run Scan"):
     results = []
