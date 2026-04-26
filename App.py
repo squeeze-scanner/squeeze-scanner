@@ -72,6 +72,7 @@ def fetch_data(ticker):
 
         close = df["Close"]
         volume = df["Volume"]
+        price = float(close.iloc[-1])
 
         returns = close.pct_change()
 
@@ -113,6 +114,7 @@ def fetch_data(ticker):
 
         return {
             "Ticker": ticker,
+            "Price": round(price, 2),
             "Score": round(score, 2),
             "Momentum %": round(momentum * 100, 2),
             "Volatility": round(volatility, 2),
