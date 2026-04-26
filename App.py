@@ -5,7 +5,7 @@ import yfinance as yf
 
 st.set_page_config(page_title="Squeeze Scanner", layout="wide")
 
-st.title("Squeeze Scanner")
+st.title("🚀 Squeeze Scanner (Stable Real Data)")
 
 TICKERS = ["AMC", "GME", "BB", "BYND", "NKLA", "SAVA", "FUBO", "PLUG", "RIVN"]
 
@@ -18,60 +18,39 @@ def rsi(series, period=14):
 
 def score_stock(ticker):
     try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period="3mo")
+        data = yf.download(ticker, period="3mo", progress=False)
 
-        if hist is None or hist.empty:
+        if data.empty:
             return None
 
-        close = hist["Close"]
-        volume = hist["Volume"]
+        close = data["Close"]
+        volume = data["Volume"]
 
         rsi_val = float(rsi(close).iloc[-1])
         rel_vol = float(volume.iloc[-1] / volume.mean())
 
-        # NEVER trust .info on cloud → safe fallback
-        try:
-            info = stock.fast_info if hasattr(stock, "fast_info") else {}
-        except:
-            info = {}
-
-        short_float = 0
-        shares_short = 0
-        avg_vol = 1
-
-        try:
-            short_float = float(getattr(stock, "info", {}).get("shortPercentOfFloat", 0) or 0) * 100
-            shares_short = float(getattr(stock, "info", {}).get("sharesShort", 0) or 0)
-            avg_vol = float(getattr(stock, "info", {}).get("averageVolume", 1) or 1)
-        except:
-            pass
-
-        days_to_cover = shares_short / avg_vol if avg_vol else 0
+        # SAFE synthetic squeeze proxies (no stock.info dependency)
+        price_change = float((close.iloc[-1] / close.iloc[-20]) - 1)
 
         score = 0
 
         if rsi_val < 30:
-            score += 20
-        if short_float > 30:
             score += 25
-        if days_to_cover > 5:
-            score += 20
         if rel_vol > 2:
-            score += 15
+            score += 25
+        if price_change < -0.1:
+            score += 20  # oversold squeeze setup
 
         return {
             "Ticker": ticker,
             "Score": round(score, 2),
             "RSI": round(rsi_val, 2),
-            "Short % Float": round(short_float, 2),
-            "Days to Cover": round(days_to_cover, 2),
-            "Rel Volume": round(rel_vol, 2)
+            "Rel Volume": round(rel_vol, 2),
+            "20D Change": round(price_change * 100, 2)
         }
 
-    except Exception:
+    except:
         return None
-
 
 if st.button("Run Scan"):
     results = []
@@ -84,11 +63,13 @@ if st.button("Run Scan"):
     df = pd.DataFrame(results)
 
     if not df.empty:
-        df = df.sort_values(by="Score", ascending=False)
-        st.dataframe(df)
+        df = df.sort_values("Score", ascending=False)
+        st.dataframe(df, use_container_width=True)
 
-        alerts = df[df["Score"] > 60]
+        alerts = df[df["Score"] > 50]
 
         if not alerts.empty:
-            st.error("SQUEEZE ALERTS")
+            st.error("🚨 SQUEEZE ALERTS")
             st.dataframe(alerts)
+    else:
+        st.warning("No data returned — try again")
