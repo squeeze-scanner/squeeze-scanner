@@ -90,7 +90,28 @@ if st.button("Run Pro Scan"):
             data = fetch_data(t)
             if data:
                 results.append(data)
-            time.sleep(0.2)  # prevents API throttling
 
-    if results:
-        df
+    # 🧠 ALWAYS create df (fixes NameError)
+    if len(results) == 0:
+        st.warning("No data returned — showing empty table")
+        df = pd.DataFrame([{
+            "Ticker": "N/A",
+            "Score": 0,
+            "RSI": 0,
+            "Rel Volume": 0,
+            "3M Change %": 0,
+            "Signal": "No Data",
+            "Triggers": "Retry scan"
+        }])
+    else:
+        df = pd.DataFrame(results)
+        df = df.sort_values("Score", ascending=False)
+
+    st.subheader("📊 Scan Results")
+    st.dataframe(df, use_container_width=True)
+
+    alerts = df[df["Score"] >= 70]
+
+    if not alerts.empty:
+        st.error("🚨 STRONG SQUEEZE SETUPS DETECTED")
+        st.dataframe(alerts, use_container_width=True)1
