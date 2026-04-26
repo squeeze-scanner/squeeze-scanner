@@ -2,7 +2,19 @@ import pandas as pd
 import yfinance as yf
 import numpy as np
 
-TICKERS = ["AMC", "GME", "BB", "BYND", "NKLA", "SAVA", "FUBO", "PLUG", "RIVN"]
+def get_universe():
+    sp500 = load_sp500_universe()
+
+    if sp500:
+        return sp500
+
+    try:
+        df = pd.read_csv("universe.csv")
+        return df["ticker"].tolist()
+    except:
+        return []
+
+TICKERS = get_universe()
 
 # -----------------------------
 # DATA LAYER
