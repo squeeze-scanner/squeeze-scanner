@@ -1,42 +1,81 @@
 import streamlit as st
 import pandas as pd
+import yfinance as yf
 
 st.set_page_config(page_title="Squeeze Scanner", layout="wide")
 
-st.title("🚀 Squeeze Scanner (100% Stable)")
+st.title("🚀 Squeeze Scanner (Real Data)")
 
 TICKERS = ["AMC", "GME", "BB", "BYND", "NKLA", "SAVA", "FUBO", "PLUG", "RIVN"]
 
 # -----------------------------
-# SAFE MOCK + REAL HYBRID MODE
+# SAFE REAL DATA FUNCTION
 # -----------------------------
 
-def generate_safe_data():
-    import random
+@st.cache_data(ttl=300)
+def get_stock_data(ticker):
+    try:
+        df = yf.download(ticker, period="3mo", progress=False)
 
-    data = []
+        if df is None or df.empty:
+            return None
+
+        close = df["Close"]
+        volume = df["Volume"]
+
+        # Real calculations
+        rel_vol = float(volume.iloc[-1] / volume.mean())
+        change = float((close.iloc[-1] / close.iloc[0]) - 1)
+
+        # Simple RSI approximation (stable version)
+        delta = close.diff()
+        gain = delta.where(delta > 0, 0).rolling(14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+        rs = gain / loss
+        rsi = float(100 - (100 / (1 + rs)).iloc[-1])
+
+        score = 0
+
+        if rsi < 30:
+            score += 30
+        if rel_vol > 2:
+            score += 30
+        if change < -0.1:
+            score += 20
+
+        return {
+            "Ticker": ticker,
+            "Score": round(score, 2),
+            "RSI": round(rsi, 2),
+            "Rel Volume": round(rel_vol, 2),
+            "3M Change %": round(change * 100, 2)
+        }
+
+    except:
+        return None
+
+# -----------------------------
+# UI
+# -----------------------------
+
+if st.button("Run Real Data Scan"):
+    results = []
 
     for t in TICKERS:
-        data.append({
-            "Ticker": t,
-            "Score": random.randint(10, 100),
-            "RSI": random.randint(20, 80),
-            "Rel Volume": round(random.uniform(0.5, 5), 2),
-            "Status": "Live-safe mode"
-        })
+        data = get_stock_data(t)
+        if data:
+            results.append(data)
 
-    return pd.DataFrame(data)
+    if results:
+        df = pd.DataFrame(results)
+        df = df.sort_values("Score", ascending=False)
 
-st.write("Click below to run scanner safely (no crashes)")
+        st.dataframe(df, use_container_width=True)
 
-if st.button("Run Scan"):
-    df = generate_safe_data()
-    df = df.sort_values("Score", ascending=False)
+        alerts = df[df["Score"] > 60]
 
-    st.dataframe(df, use_container_width=True)
-
-    alerts = df[df["Score"] > 70]
-
-    if not alerts.empty:
-        st.error("🚨 SQUEEZE ALERTS")
-        st.dataframe(alerts)
+        if not alerts.empty:
+            st.error("🚨 SQUEEZE ALERTS")
+            st.dataframe(alerts, use_container_width=True)
+    else:
+        st.warning("No data returned — try again in a moment")
