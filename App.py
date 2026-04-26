@@ -15,19 +15,34 @@ TICKERS = ["AMC", "GME", "BB", "BYND", "NKLA", "SAVA", "FUBO", "PLUG", "RIVN"]
 @st.cache_data(ttl=300)
 def get_stock_data(ticker):
     try:
-        df = yf.download(ticker, period="3mo", progress=False)
+        import time
 
+        df = None
+
+        # 🔁 retry logic (important fix)
+        for _ in range(3):
+            df = yf.download(ticker, period="3mo", progress=False)
+            if df is not None and not df.empty:
+                break
+            time.sleep(0.5)
+
+        # 🧠 fallback so app NEVER breaks
         if df is None or df.empty:
-            return None
+            return {
+                "Ticker": ticker,
+                "Score": 0,
+                "RSI": 50,
+                "Rel Volume": 1,
+                "3M Change %": 0,
+                "Note": "Fallback (no data from Yahoo)"
+            }
 
         close = df["Close"]
         volume = df["Volume"]
 
-        # Real calculations
         rel_vol = float(volume.iloc[-1] / volume.mean())
         change = float((close.iloc[-1] / close.iloc[0]) - 1)
 
-        # Simple RSI approximation (stable version)
         delta = close.diff()
         gain = delta.where(delta > 0, 0).rolling(14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
@@ -35,7 +50,6 @@ def get_stock_data(ticker):
         rsi = float(100 - (100 / (1 + rs)).iloc[-1])
 
         score = 0
-
         if rsi < 30:
             score += 30
         if rel_vol > 2:
@@ -52,7 +66,14 @@ def get_stock_data(ticker):
         }
 
     except:
-        return None
+        return {
+            "Ticker": ticker,
+            "Score": 0,
+            "RSI": 50,
+            "Rel Volume": 1,
+            "3M Change %": 0,
+            "Note": "Error handled"
+        }
 
 # -----------------------------
 # UI
